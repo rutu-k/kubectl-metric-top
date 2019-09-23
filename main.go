@@ -13,10 +13,7 @@ func main() {
 	app.Usage = "kube-show-metrics"
 
 	app.Commands = []cli.Command{
-		{Name: "fsusage", Usage: "inform pod fsusage", Action: listFsMetrics},
-		{Name: "kafka", Usage: "inform pod kafka outgoing bytes", Action: listKafkaMetrics},
-		{Name: "rdb", Usage: "inform pod kafka outgoing bytes", Action: listRdbMetrics},
-		{Name: "nginx", Usage: "inform pod kafka outgoing bytes", Action: listNginxMetrics},
+		{Name: "top", Usage: "inform pod fsusage", Flags: []cli.Flag{cli.BoolFlag{Name: "fsusage"}, cli.BoolFlag{Name: "kafka"}, cli.BoolFlag{Name: "rdb"}, cli.BoolFlag{Name: "nginx"}}, Action: listMetrics},
 	}
 
 	app.Run(os.Args)

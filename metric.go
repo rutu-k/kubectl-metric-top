@@ -2,14 +2,16 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"time"
 
-	"k8s.io/client-go/kubernetes"
-	//"k8s.io/client-go/rest"
 	"github.com/olekukonko/tablewriter"
 	"github.com/urfave/cli"
-	//"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/kubernetes"
+	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 type MetricValueList struct {
@@ -31,122 +33,54 @@ type MetricValueList struct {
 	} `json:"items"`
 }
 
-func getMetrics(clientset *kubernetes.Clientset, pods *MetricValueList) error {
-	data, err := clientset.RESTClient().Get().AbsPath("/apis/custom.metrics.k8s.io/v1beta1/namespaces/default/pods/*/fs_usage_bytes").DoRaw()
-	if err != nil {
-		return err
-	}
-	err = json.Unmarshal(data, &pods)
-	return err
-}
+func listMetrics(c *cli.Context) {
+	var config *rest.Config
 
-func getKafkaMetrics(clientset *kubernetes.Clientset, pods *MetricValueList) error {
-	data, err := clientset.RESTClient().Get().AbsPath("/apis/custom.metrics.k8s.io/v1beta1/namespaces/default/pods/*/kafka_server_brokertopicmetrics_total_messagesinpersec_count").DoRaw()
+	config, err := clientcmd.BuildConfigFromFlags("", os.Getenv("HOME")+"/.kube/config")
 	if err != nil {
-		return err
+		fatal(fmt.Sprintf("error in getting Kubeconfig: %v", err))
 	}
-	err = json.Unmarshal(data, &pods)
-	return err
-}
 
-func getRdbMetrics(clientset *kubernetes.Clientset, pods *MetricValueList) error {
-	data, err := clientset.RESTClient().Get().AbsPath("/apis/custom.metrics.k8s.io/v1beta1/namespaces/redis/pods/*/redis_commands_processed").DoRaw()
+	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		return err
+		fatal(fmt.Sprintf("error in getting clientset from Kubeconfig: %v", err))
 	}
-	err = json.Unmarshal(data, &pods)
-	return err
-}
-
-func getNginxMetrics(clientset *kubernetes.Clientset, pods *MetricValueList) error {
-	data, err := clientset.RESTClient().Get().AbsPath("/apis/custom.metrics.k8s.io/v1beta1/namespaces/default/pods/*/nginx_connections_accepted").DoRaw()
-	if err != nil {
-		return err
+	var metricFlag string
+	if c.Bool("fsusage") {
+		metricFlag = "fs_usage_bytes"
+	} else if c.Bool("kafka") {
+		metricFlag = "kafka_server_brokertopicmetrics_total_messagesinpersec_count"
+	} else if c.Bool("rdb") {
+		metricFlag = "redis_commands_processed"
+	} else if c.Bool("nginx") {
+		metricFlag = "nginx_connections_accepted"
+	} else {
+		fmt.Println("Unknown Flag")
+		os.Exit(1)
 	}
-	err = json.Unmarshal(data, &pods)
-	return err
-}
-
-func listFsMetrics(c *cli.Context) {
-	//fmt.Println("listing running Pods")
-	clientset := getKubeHandle()
 
 	var pods MetricValueList
-	err := getMetrics(clientset, &pods)
+	path := "/apis/custom.metrics.k8s.io/v1beta1/namespaces/default/pods/*/" + metricFlag
+	data, err := clientset.RESTClient().Get().AbsPath(path).DoRaw()
 	if err != nil {
-		panic(err.Error())
+		return
+	}
+	err = json.Unmarshal(data, &pods)
+	if err != nil {
+		fmt.Println(err)
 	}
 
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Pod Name", "Namespace", "Metric", "Value"})
 
-	for _, m := range pods.Items {
-		data := []string{m.DescribedObject.Name, m.DescribedObject.Namespace, m.MetricName, m.Value}
-		table.Append(data)
-		//fmt.Println(m.DescribedObject.Name, m.DescribedObject.Namespace, m.MetricName, m.Value)
+	for _, l := range pods.Items {
+		data1 := []string{l.DescribedObject.Name, l.DescribedObject.Namespace, l.MetricName, l.Value}
+		table.Append(data1)
 	}
 	table.Render()
 }
 
-func listKafkaMetrics(c *cli.Context) {
-	//fmt.Println("listing running Pods")
-	clientset := getKubeHandle()
-
-	var pods MetricValueList
-	err := getKafkaMetrics(clientset, &pods)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Pod Name", "Namespace", "Metric", "Value"})
-
-	for _, m := range pods.Items {
-		data := []string{m.DescribedObject.Name, m.DescribedObject.Namespace, m.MetricName, m.Value}
-		table.Append(data)
-		//fmt.Println(m.DescribedObject.Name, m.DescribedObject.Namespace, m.MetricName, m.Value)
-	}
-	table.Render()
-}
-
-func listRdbMetrics(c *cli.Context) {
-	//fmt.Println("listing running Pods")
-	clientset := getKubeHandle()
-
-	var pods MetricValueList
-	err := getRdbMetrics(clientset, &pods)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Pod Name", "Namespace", "Metric", "Value"})
-
-	for _, m := range pods.Items {
-		data := []string{m.DescribedObject.Name, m.DescribedObject.Namespace, m.MetricName, m.Value}
-		table.Append(data)
-		//fmt.Println(m.DescribedObject.Name, m.DescribedObject.Namespace, m.MetricName, m.Value)
-	}
-	table.Render()
-}
-
-func listNginxMetrics(c *cli.Context) {
-	//fmt.Println("listing running Pods")
-	clientset := getKubeHandle()
-
-	var pods MetricValueList
-	err := getNginxMetrics(clientset, &pods)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Pod Name", "Namespace", "Metric", "Value"})
-
-	for _, m := range pods.Items {
-		data := []string{m.DescribedObject.Name, m.DescribedObject.Namespace, m.MetricName, m.Value}
-		table.Append(data)
-		//fmt.Println(m.DescribedObject.Name, m.DescribedObject.Namespace, m.MetricName, m.Value)
-	}
-	table.Render()
+func fatal(msg string) {
+	os.Stderr.WriteString(msg + "\n")
+	os.Exit(1)
 }
