@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hackathon
+  namespace: default
+  labels:
+    app: hackathon
+spec:
+  selector:
+    matchLabels:
+      app: hackathon
+  template:
+    metadata:
+      labels:
+        app: hackathon
+      annotations:
+        prometheus.io/port: "8081"
+        prometheus.io/scrape: "true"
+    spec:
+      containers:
+      - image: rahulgusain/nginx:1.0
+        name: nginx
+        volumeMounts:
+        - name: share
+          mountPath: /var/log/nginx
+        ports:
+          - containerPort: 80
+            name: nginxport
+      - image: rahulgusain/hackon:1.0
+        name: go
+        volumeMounts:
+        - name: share
+          mountPath: /tmp
+        ports:
+          - containerPort: 8081
+            name: metrics 
+      volumes:
+      - name: share
+        emptyDir: {}        
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-service
+  namespace: default
+  labels:
+    app: hackathon 
+spec:
+  selector:
+    app: hackathon
+  ports:
+    - name: nginxport
+      port: 80
+      protocol: TCP
+      targetPort: nginxport
+    - name: metrics
+      port: 8081
+      protocol: TCP
+      targetPort: metrics
