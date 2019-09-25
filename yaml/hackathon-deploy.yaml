@@ -1,18 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: hackathon
+  name: nginx
   namespace: default
   labels:
-    app: hackathon
+    app: nginx
 spec:
   selector:
     matchLabels:
-      app: hackathon
+      app: nginx
   template:
     metadata:
       labels:
-        app: hackathon
+        app: nginx
       annotations:
         prometheus.io/port: "8081"
         prometheus.io/scrape: "true"

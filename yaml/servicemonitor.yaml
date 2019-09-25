@@ -1,14 +1,14 @@
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: hackathon
-  namespace: default
+  name: nginx
+  namespace: monitoring
   labels:
-    app: hackathon
+    app: nginx
 spec:
   selector:
     matchLabels:
-      app: hackathon
+      app: nginx
   namespaceSelector:
     any: true
   endpoints:

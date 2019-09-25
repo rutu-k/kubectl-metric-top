@@ -66,36 +66,48 @@ func (m Metrics) Get() {
 		fatal(fmt.Sprintf("error getting list of pods: %v", err))
 	}
 
+	ns, err := clientset.CoreV1().Namespaces().List(metav1.ListOptions{})
+	if err != nil {
+		fatal(fmt.Sprintf("error getting list of pods: %v", err))
+	}
+
+	var nsdata []string
+	for _, nsv := range ns.Items {
+		nsdata = append(nsdata, nsv.Name)
+	}
+
+	// match := range re.FindAllString(pod.Name, -1)
 	var re = regexp.MustCompile(str1)
-	var nspace string
+	var nspace []string
 	for _, pod := range podz.Items {
-		for _, match := range re.FindAllString(pod.Name, -1) {
-			if match != "" {
-				nspace = pod.Namespace
-			} else {
-				nspace = "default"
-			}
+		match := re.MatchString(pod.Name)
+		if match {
+			nspace = append(nspace, pod.Namespace)
+		} else {
+			nspace = nsdata
 		}
-	}
-
-	path := "/apis/custom.metrics.k8s.io/v1beta1/namespaces/" + nspace + "/pods/*/" + mflag
-
-	data, err := clientset.RESTClient().Get().AbsPath(path).DoRaw()
-	if err != nil {
-		return
-	}
-	var pods MetricValueList
-	err = json.Unmarshal(data, &pods)
-	if err != nil {
-		fmt.Println(err)
 	}
 
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Pod Name", "Namespace", "Metric", "Value"})
 
-	for _, l := range pods.Items {
-		data1 := []string{l.DescribedObject.Name, l.DescribedObject.Namespace, l.MetricName, l.Value}
-		table.Append(data1)
+	for _, value := range nspace {
+		path := "/apis/custom.metrics.k8s.io/v1beta1/namespaces/" + value + "/pods/*/" + mflag
+		data, err := clientset.RESTClient().Get().AbsPath(path).DoRaw()
+		if err != nil {
+			fmt.Println("No resource found on namspace:", value)
+		}
+		var pods MetricValueList
+		err = json.Unmarshal(data, &pods)
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		for _, l := range pods.Items {
+			data1 := []string{l.DescribedObject.Name, l.DescribedObject.Namespace, l.MetricName, l.Value}
+			table.Append(data1)
+		}
+
 	}
 	table.Render()
 }
