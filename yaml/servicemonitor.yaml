@@ -1,0 +1,16 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: hackathon
+  namespace: default
+  labels:
+    app: hackathon
+spec:
+  selector:
+    matchLabels:
+      app: hackathon
+  namespaceSelector:
+    any: true
+  endpoints:
+  - port: metrics
+    path: /metrics
