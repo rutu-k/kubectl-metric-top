@@ -9,12 +9,17 @@ import (
 	"time"
 
 	"github.com/olekukonko/tablewriter"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
+
+type Metrics interface {
+	Get()
+}
 
 type MetricValueList struct {
 	Kind       string `json:"kind"`
@@ -35,17 +40,17 @@ type MetricValueList struct {
 	} `json:"items"`
 }
 
-type Metrics struct {
+type MetricName struct {
 	Name string
 }
 
 func NewMetrics(metricFlag string) Metrics {
-	return Metrics{
+	return MetricName{
 		Name: metricFlag,
 	}
 }
 
-func (m Metrics) Get() {
+func (m MetricName) Get() {
 	mflag := m.Name
 	str := strings.Split(mflag, "_")
 	str1 := str[0]
@@ -61,22 +66,8 @@ func (m Metrics) Get() {
 		fatal(fmt.Sprintf("error in getting clientset from Kubeconfig: %v", err))
 	}
 
-	podz, err := clientset.CoreV1().Pods("").List(metav1.ListOptions{})
-	if err != nil {
-		fatal(fmt.Sprintf("error getting list of pods: %v", err))
-	}
+	podz, err := getPods(clientset)
 
-	ns, err := clientset.CoreV1().Namespaces().List(metav1.ListOptions{})
-	if err != nil {
-		fatal(fmt.Sprintf("error getting list of pods: %v", err))
-	}
-
-	var nsdata []string
-	for _, nsv := range ns.Items {
-		nsdata = append(nsdata, nsv.Name)
-	}
-
-	// match := range re.FindAllString(pod.Name, -1)
 	var re = regexp.MustCompile(str1)
 	var nspace []string
 	for _, pod := range podz.Items {
@@ -84,7 +75,7 @@ func (m Metrics) Get() {
 		if match {
 			nspace = append(nspace, pod.Namespace)
 		} else {
-			nspace = nsdata
+			nspace = getNS(clientset)
 		}
 	}
 
@@ -110,6 +101,26 @@ func (m Metrics) Get() {
 
 	}
 	table.Render()
+}
+
+func getPods(clientset *kubernetes.Clientset) (podz *v1.PodList, err error) {
+	podz, err = clientset.CoreV1().Pods("").List(metav1.ListOptions{})
+	if err != nil {
+		fatal(fmt.Sprintf("error getting list of pods: %v", err))
+	}
+	return podz, err
+}
+
+func getNS(clientset *kubernetes.Clientset) (nsdata []string) {
+	ns, err := clientset.CoreV1().Namespaces().List(metav1.ListOptions{})
+	if err != nil {
+		fatal(fmt.Sprintf("error getting list of namespaces: %v", err))
+	}
+	//var nsdata []string
+	for _, nsv := range ns.Items {
+		nsdata = append(nsdata, nsv.Name)
+	}
+	return nsdata
 }
 
 func fatal(msg string) {
